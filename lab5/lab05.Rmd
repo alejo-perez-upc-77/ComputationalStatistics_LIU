@@ -1,0 +1,298 @@
+---
+title: "Computational Statistics Lab 5"
+author: "Martynas Lukosevicius, Alejo Perez Gomez, Zahra Jalil Pour"
+date: "04/12/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 1: Hypothesis testing
+
+## 1.
+
+For this question we are required to make a scatter plot and conclude whether the lottery looks random. 
+```{r, echo = FALSE, fig.height=3}
+new_df <- read.csv("lottery.csv", sep = ";")
+##View(new_df)
+## 1
+X <- new_df$Day_of_year
+Y <- new_df$Draft_No 
+plot(X,Y,main="Scatterplot Y versus X", xlab="day of year ", ylab="Draft_no ", pch=19)
+```
+
+By judging based on our plot, lottery looks random.
+
+## 2. 
+
+An estimate $\hat{Y}$ will be computed using function *loess()* and afterwards we will plot $\hat{Y}(X)$ adding it to the previous plot.
+
+```{r, echo = FALSE, fig.height=3}
+lw1 <- loess(Y ~ X, data = new_df)
+new_df$Y_hat <- predict(lw1, new_df$Day_of_year)
+plot(Y ~ X, data=new_df,pch=19,cex=0.1)
+lines(X,lw1$fitted,col="red",lwd=3)
+```
+
+From estimates we can see that there is some pattern in the data, however it is hardly visible.
+
+## 3.
+
+For this section we will use the statistic given, from where we intuit it stands for a slope in $\hat{Y}(X)$
+
+```{r, echo = FALSE}
+statis <- function(data, model){
+  index_max <- which.max(model$fitted)
+  index_min <- which.min(model$fitted)
+  
+  X_a <- data$Day_of_year[index_min]
+  Y_hat_a <- model$fitted[index_min]
+  
+  X_b <- data$Day_of_year[index_max]
+  Y_hat_b <- model$fitted[index_max]
+  statistic <- (Y_hat_b - Y_hat_a)/(X_b - X_a)
+  return(statistic)
+}
+
+library(boot)
+fc<- function(data, index){
+  data <- as.data.frame(data[index, ])
+  loes <- loess(Draft_No ~ Day_of_year, data)
+  return(statis(data,loes))
+}
+
+
+# bootstrap
+results <- boot(new_df, statistic = fc, R=2000)  # i think I made mistake here about statistics
+plot(results)
+
+# h0:0, ha != 0
+#data before bootstrap is not centered so we calculate distance from h0 to mean of distribution
+diff <- abs(0-mean(results$t))
+p_value <- (sum(results$t > (mean(results$t) + diff)) + sum(results$t < (mean(results$t) - diff)))/2000
+
+```
+For this hypothesis testing let our hypothesis be.
+
+$H_0: t = 0$ - lottery is random
+
+$H_a: t \neq 0$ - lottery is not random
+
+We will consider two sided p-value: `r p_value`. That is because we account for values that would reject the null hypothesis above and below $t=0$.
+
+As p-value results in less than 0.05 that lead us reject null hypothesis, meaning that lottery is not random.
+
+## 4.
+
+Permutation test function will be used in this occasion to evaluate the next hypothesis analysis with $B=2000$:
+
+$H_0: t = 0$ - lottery is random
+
+$H_a: t \neq 0$ -lottery is not random
+
+```{r}
+permutation_test <- function(data, B){
+  
+  origin_loes <- loess(Draft_No ~ Day_of_year, data)
+  t_origin <- statis(data, origin_loes)
+  
+  stat= numeric(B)
+  n = dim(data)[1]
+  for(b in 1:B){
+    perm_data <- data.frame(data)
+    perm_data$Day_of_year = sample(data$Day_of_year, n)
+    loes_h1 <- loess(Draft_No ~ Day_of_year, perm_data)
+    stat[b] <- statis(perm_data,loes_h1)
+  }
+  # statistic from original dat
+
+  p_value <- sum(abs(stat) >= abs(t_origin))/B
+  return(p_value)
+}
+```
+
+```{r, echo = FALSE}
+res <- permutation_test(new_df,2000)
+```
+
+The permutation test when B = 2000 results in a p-value = `r res`.
+
+## 5.
+
+A crude estimate of the power of the test constructed in Step 4 will be made.
+
+```{r,echo=FALSE}
+
+new_y <- function(x, alpha){
+  set.seed(12345)
+  beta <- rnorm(1, 183, 10) 
+  y <- max(0, min(alpha * x + beta, 366) )
+  return(y)
+}
+
+#y <- sapply(new_df$Day_of_year, new_y, alpha = 0.2)
+
+### 5-2
+# new_dataset <- data.frame(Day_of_year = new_df$Day_of_year, Draft_No = y )
+# permutation_test(new_dataset, 200)
+
+### 5-3
+new_alpha <-seq(0.1, 10, 0.1)
+p_val <- c()
+for( i in 1:length(new_alpha)){
+  y <- sapply(new_df$Day_of_year,new_y, alpha = new_alpha[i])
+  new_dataset <- data.frame(Day_of_year = new_df$Day_of_year, Draft_No = y )
+  p_val[i]<-permutation_test(new_dataset,200)
+}
+
+
+```
+
+The table bellow shows the p-values for alpha 0.1:10 by 0.1 for which p is not equal to 0.
+
+```{r, echo=FALSE}
+results <- data.frame(alpha=new_alpha,p = p_val)
+dontprinttwice <- ifelse(sum(results$p !=0) == 0, print("all p values are 0"), knitr::kable(t(results[results$p !=0 , ])) )
+```
+
+The computed power of the test is: 1-type 2 error.
+type 2 error is a probability of failing to reject $H_0$ when $H_a$ is true. We know that our generated data samples are not random. The amount of rejected $H_0:$ `r sum(results$p > 0.05)`. As a result type 2 error is: `r sum(results$p > 0.05)/length(results$p) `, and power of the test is: `r 1-(sum(results$p > 0.05)/length(results$p))`.
+
+# Question 2: Bootstrap, jackknife and confidence intervals
+
+In this section we are required to use bootstrapping and jackknife techniques to estimate some unknown parameters at population level based on the sampling knowledge comprised in confidence intervals.
+
+## 1.
+Histogram of the Data and distribution-based approach.
+
+```{r, echo=FALSE}
+library("boot")
+
+
+## 1 Plot the histogram of Price. Does it remind any conventional distribution? Compute the mean price.
+prices = read.csv("prices1.csv", sep = ";")  
+
+hist(prices$Price, breaks = 15)
+```
+
+It resembles a Gamma distribution with shape = 3, scale = 2.
+
+## 2.
+
+```{r,echo=FALSE}
+## Mean 
+mean_price <- mean(prices$Price)
+
+## 2 Estimate the distribution of the mean price of the house using bootstrap
+
+
+mean_stat <- function(data, vn){
+  data<- as.data.frame(data[vn, ])
+  data_mean <- as.numeric(colMeans(data['Price']))
+  data_mean
+}
+
+ans <- boot(data = prices, statistic = mean_stat, R=2000)
+
+plot(ans)
+
+# CI percentil
+ciperc <- boot.ci(ans, index = 1, type=c('perc'))
+
+# CI bca
+
+cibca <- boot.ci(ans, index =1, type=c('bca'))
+
+# CI normal
+
+cinorm <- boot.ci(ans, index =1, type=c('norm'))
+
+## Bias-correction
+
+T_bias_correction <- 2*mean_price - mean(ans$t)
+
+## variance 
+boot_var <- (1/(ans$R-1))* sum((ans$t-mean(ans$t))^2)
+
+conf_int <- rbind(c(ciperc$percent[4:5]), c(cibca$bca[4:5]), c(cinorm$normal[2:3]))
+row.names(conf_int) <- c("percentile", "BCa", "first-order normal")
+colnames(conf_int) <- c("low", "high")
+```
+
+After applying the aforementioned techniques we encountered this parameter estimations.
+
+To calculate the Bias-Correction we applied the ensuing formula. Note $B$ will be our number of sub-samplings, $T$ stands for our Data statistic and $T_i^*$ our statistic for sub-samplings.
+
+$$T_1=2T(D)-\frac1{B}\sum_{i=1}^BT_i^*$$
+
+In order to calculate the variance, the following formula will be used:
+
+$$\hat{Var[T(·)]}=\frac1{B-1}\sum_{i=1}^B(T(D_i)^*-\bar{T}(D^*)^2))$$
+
+Bootstrap bias-correction: `r T_bias_correction`. Variance - `r boot_var`. 
+
+95% confidence intervals: `r knitr::kable(conf_int)`
+
+
+## 3.
+
+For this section the same thing as in the previous point will be calculated by using jackknife instead. This estimation will be ruled by this mathematical expression:
+
+$$\hat{Var[T(·)]}=\frac1{n(n-1)}\sum_{i=1}^n((T_i^*)-J(T)^2))$$
+Where $T_i^*=nT(D)-(n-1)T(D^*_i)$ and $J(T)=\frac1{n}\sum_{i=1}^nT^*_i$
+
+
+
+
+
+
+```{r, echo=FALSE}
+#3 jackknife
+
+jackknife <- function(data, R, func){
+  R <- ifelse(length(data) <= R, length(data), R)
+  t <- vector()
+  for (i in 1:R) {
+    t[i] <- func(data[-i])
+  }
+  
+  Ti <- R*func(data) - (R-1)*t
+  var <- (1/(R*(R-1)))*sum((Ti-mean(t))^2)
+  results <- list(R=R, t=t, t_mean = mean(t), variance = var)
+  return(results)
+}
+
+res <- jackknife(prices$Price, 2000, mean)
+```
+
+Variance using jackknife: `r res$variance`, the difference obtained between jackknife and bootstrap is: `r res$variance - boot_var`. As can we see the jackknife method tends to overestimate variance.
+
+## 4. 
+
+In the fourth point we will compare the confdence intervals obtained with respect to their length and the location of the estimated mean in such intervals.
+
+
+```{r, echo = FALSE}
+location <- function(high,low, mean){
+  length <- high-low
+  loc <- (mean-low) /length
+  res <- list(length = length, location = loc)
+  return(res)
+}
+
+loc_ciperc <- location(ciperc$percent[5],ciperc$percent[4], mean_price)
+loc_ciBCA <- location(cibca$bca[5],cibca$bca[4], mean_price)
+loc_cinorm <- location(cinorm$normal[3],cinorm$normal[2], mean_price)
+
+conf_int_comp <- rbind(c(ciperc$percent[4:5], loc_ciperc$length, loc_ciperc$location),
+                  c(cibca$bca[4:5],loc_ciBCA$length, loc_ciBCA$location),
+                  c(cinorm$normal[2:3], loc_cinorm$length, loc_cinorm$location))
+row.names(conf_int_comp) <- c("percentile", "BCa", "first-order normal")
+colnames(conf_int_comp) <- c("low", "high", "length", "location of mean")
+```
+
+The table below compares confidence intervals: `r knitr::kable(conf_int_comp)`
+
+The mean location shows the portion of interval length from the beginning of the interval until the mean.

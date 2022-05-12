@@ -1,0 +1,88 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+The goal is to draw an i.i.d sample from the truncated to the positive half-axis standard normal
+distribution N(0; 1), whose probability density function is
+
+```{r}
+target <- function(x){
+  if (x >= 0 ){
+    
+    part_1 <- exp((-x^2)/2)
+    return(sqrt(2/pi)*part_1)
+  }
+  else{return(0)}
+    
+}
+
+mixture_1 <- function(x){
+  
+  alpha_1 <- sqrt(2/pi)
+  f1 <- ifelse(( x >= 0 & x <= 1), 1, 0)
+  g1 <- exp((-x^2)*0.5)
+  
+  return(alpha_1*f1*g1 )
+}
+
+mixture_2  <- function(x){
+  
+  alpha_2 <- sqrt(1/(2*pi))
+  support_2 <- ifelse( x >= 1 , 1, 0)
+  f2 <- 2*exp(-2*(x-1))*support_2
+  g2 <- exp((-(x-2)^2)*0.5)
+  
+  return(alpha_2*f2*g2 )
+}
+
+generalizing <- function(x){
+  return(mixture_1(x) + mixture_2(x))
+}
+
+```
+
+$$c_{maj}>0;sup_x(f(x)/g(x)) \le c_{maj}$$
+$$c_{maj}>0;sup_x(f(x)/g(x)) \le c_{maj}$$
+
+
+```{r}
+
+randomnumber <- function(){
+  numb <- runif(1)
+  if(numb<= 2/3){
+    return(mixture_1(x))
+  }
+  else{
+    return(mixture_2(x))
+  }
+}
+
+CompleteDist <- function(c, a, rej){
+  z <- TRUE
+  res <- 0
+
+  Tmin <- (c^2)/3
+  xmaj <- (c^2)/(3-2*a)
+  cmaj <- target(xmaj,c)/generalizing(xmaj,c, a) 
+  
+  while (z == TRUE) {
+    y <- randomnumber(Tmin,a)
+    u <- runif(1)
+    if(u <= distrib1(y, c) / (cmaj*majDensity(y,c,a))){
+      res <- y
+      z <- FALSE    
+    }
+    if(rej){
+    rejected <<- rejected + 1
+    }
+  }
+  return(res)
+}
+
+rDist <- function(n,c,a ,rej = FALSE){
+ return(replicate(n, CompleteDist(c, a, rej)))
+}
+
+  
+```

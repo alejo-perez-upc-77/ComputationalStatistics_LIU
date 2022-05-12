@@ -1,0 +1,44 @@
+---
+title: "task2"
+author: "Alejo Perez Gomez"
+date: "10/12/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 2: EM algorithm
+
+## 1.
+
+`Insert Explanation` on the similarity in patterns of Y and Z.
+
+``` {r, echo=FALSE, warning=FALSE}
+library(ggplot2)
+library(reshape2)
+
+df <- read.csv("C:/Users/alejo/Documents/GitHub_Repos/computationalStats/lab6/physical1.csv")
+
+#melt data frame into long format
+df_plot <- melt(df ,  id.vars = 'X', variable.name = 'series')
+
+#create line plot for each column in data frame
+ggplot(df_plot, aes(X, value)) +
+  geom_line(aes(colour = series))
+
+```
+
+```{r}
+library(ggplot2)
+palette_OkabeIto_black <- c("blue1", "maroon")
+p<- ggplot(data=df)
+p+geom_line(aes(X, Y, color="Z"))+
+  geom_line(aes(X, Z, color="Y"))+
+  scale_color_manual(values = palette_OkabeIto_black)+
+  theme_bw()+
+  labs(x="Time", y="variables Y , Z")
+  ggtitle("Dependencies of Y and Z versus X")
+```
+## 2.
